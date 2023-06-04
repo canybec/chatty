@@ -1,9 +1,16 @@
 import { OPENAI_KEY } from '$env/static/private'
-import type { CreateChatCompletionRequest, ChatCompletionRequestMessage } from 'openai'
-import type { RequestHandler } from './$types'
+import { type CreateChatCompletionRequest, type ChatCompletionRequestMessage, type CreateEmbeddingResponse, type CreateEmbeddingRequest, OpenAIApi, Configuration } from 'openai';
+import type { RequestHandler } from '@sveltejs/kit';
 import { getTokens } from '$lib/tokenizer'
 import { json } from '@sveltejs/kit'
 import type { Config } from '@sveltejs/adapter-vercel'
+import { supabase } from '$lib/supabaseClient'
+
+
+const configuration = new Configuration({ apiKey: OPENAI_KEY })
+const openAi = new OpenAIApi(configuration)
+
+
 
 export const config: Config = {
 	runtime: 'edge'
@@ -22,6 +29,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		}
 
 		const reqMessages: ChatCompletionRequestMessage[] = requestData.messages
+
 
 		if (!reqMessages) {
 			throw new Error('no messages provided')
@@ -51,13 +59,63 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		const moderationData = await moderationRes.json()
 		const [results] = moderationData.results
+		console.log([results])
 
 		if (results.flagged) {
 			throw new Error('Query flagged by openai')
 		}
 
-		const prompt =
-			'You are a virtual assistant for a company called Huntabyte. Your name is Axel Smith'
+		const seed = reqMessages[reqMessages.length - 1].content
+
+		//create embedding for the query
+
+
+
+		const embeddingResponse = await openAi.createEmbedding({
+			model: "text-embedding-ada-002",
+			input: seed,
+		});
+
+		//const embeddingRes: Vector = embeddingResponse.data.data.embeddings[0]
+
+
+
+
+		const embedding = JSON.stringify(embeddingResponse.data.data[0].embedding)
+
+		console.log(typeof embedding)
+
+
+		console.log('embedding xresponse', embedding)
+
+
+		const { data, error } = await supabase.rpc('nurse_gpt_search', {
+			query_embedding: embedding,
+			similarity_threshold: 0.1,
+			match_count: 2,
+		})
+
+		if (error) {
+			console.log('Error:', error)
+		} else {
+			const contentArray = data.map((row) => row.content)
+			const contentString = contentArray.join('\n')
+			console.log('Content:', contentString)
+
+
+		}
+
+
+
+
+
+
+
+		const prompt = `Conversation with an AI nurse\n\n'${contentString}'`;
+
+
+
+
 		tokenCount += getTokens(prompt)
 
 		if (tokenCount >= 4000) {

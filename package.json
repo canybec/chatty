@@ -42,6 +42,8 @@
 	},
 	"type": "module",
 	"dependencies": {
+		"@pinecone-database/pinecone": "^0.1.6",
+		"@supabase/supabase-js": "^2.24.0",
 		"gpt3-tokenizer": "^1.1.5",
 		"openai": "^3.2.1",
 		"sse.js": "^0.6.1"
